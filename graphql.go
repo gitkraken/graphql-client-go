@@ -40,6 +40,7 @@ import (
 	"net/http"
 
 	"github.com/pkg/errors"
+	"go.uber.org/multierr"
 )
 
 // Client is a client for interacting with a GraphQL API.
@@ -144,8 +145,11 @@ func (c *Client) runWithJSON(ctx context.Context, req *Request, resp interface{}
 		return errors.Wrap(err, "decoding response")
 	}
 	if len(gr.Errors) > 0 {
-		// return first error
-		return gr.Errors[0]
+		var multi error
+		for _, grError := range gr.Errors {
+			multi = multierr.Append(multi, grError)
+		}
+		return multi
 	}
 	return nil
 }
@@ -215,8 +219,11 @@ func (c *Client) runWithPostFields(ctx context.Context, req *Request, resp inter
 		return errors.Wrap(err, "decoding response")
 	}
 	if len(gr.Errors) > 0 {
-		// return first error
-		return gr.Errors[0]
+		var multi error
+		for _, grError := range gr.Errors {
+			multi = multierr.Append(multi, grError)
+		}
+		return multi
 	}
 	return nil
 }
@@ -249,17 +256,18 @@ func ImmediatelyCloseReqBody() ClientOption {
 // modify the behaviour of the Client.
 type ClientOption func(*Client)
 
-type graphErr struct {
-	Message string
+type GraphErr struct {
+	Message    string
+	StatusCode int
 }
 
-func (e graphErr) Error() string {
+func (e GraphErr) Error() string {
 	return "graphql: " + e.Message
 }
 
 type graphResponse struct {
 	Data   interface{}
-	Errors []graphErr
+	Errors []GraphErr
 }
 
 // Request is a GraphQL request.
